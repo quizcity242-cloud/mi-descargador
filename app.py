@@ -1,5 +1,4 @@
 import os
-import traceback
 from flask import Flask, render_template, request, jsonify, send_file
 import yt_dlp
 
@@ -12,32 +11,37 @@ def index():
 
 @app.route('/download', methods=['POST'])
 def download():
-    data = request.json
-    url = data.get('url')
-    print(f"DEBUG: Intentando descargar: {url}") # Esto saldrá en tus logs
+    url = request.json.get('url')
+    if not url:
+        return jsonify({"error": "No hay URL"}), 400
 
+    # Configuración limpia y sin errores de compatibilidad
     ydl_opts = {
         'format': 'best',
         'outtmpl': f'{DOWNLOAD_FOLDER}/%(title)s.%(ext)s',
         'external_downloader': 'aria2c',
         'external_downloader_args': ['-x', '16', '-s', '16', '-k', '1M'],
-        'impersonate': 'chrome',
-        'extractor_args': {'generic': ['impersonate']},
+        'http_headers': {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'Referer': 'https://www.google.com/',
+        },
         'nocheckcertificate': True,
         'noplaylist': True,
+        'quiet': True,
     }
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
             filename = ydl.prepare_filename(info)
-            print(f"DEBUG: Descarga exitosa: {filename}")
             return send_file(filename, as_attachment=True)
     except Exception as e:
-        print("--- ERROR DETECTADO ---")
-        traceback.print_exc() # Esto me dirá la línea exacta del error
-        return jsonify({"error": str(e)}), 500
+        print(f"ERROR: {str(e)}")
+        return jsonify({"error": "No se pudo descargar este link específico. Intenta con otro."}), 500
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 10000))
     app.run(host='0.0.0.0', port=port)
+
