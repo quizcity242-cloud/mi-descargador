@@ -20,9 +20,10 @@ def download():
         'outtmpl': f'{DOWNLOAD_FOLDER}/%(title)s.%(ext)s',
         'external_downloader': 'aria2c',
         'external_downloader_args': ['-x', '16', '-s', '16', '-k', '1M'],
-        # NUEVAS OPCIONES ANTI-BLOQUEO
-        'http_headers': {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        # DISFRAZ PARA CLOUDFLARE (Basado en tus logs)
+        'impersonate': 'chrome',
+        'extractor_args': {
+            'generic': ['impersonate'],
         },
         'nocheckcertificate': True,
         'noplaylist': True,
@@ -35,8 +36,8 @@ def download():
             filename = ydl.prepare_filename(info)
             return send_file(filename, as_attachment=True)
     except Exception as e:
-        print(f"Error detallado: {e}")
-        return jsonify({"error": "El sitio bloqueó el acceso o el link es inválido"}), 500
+        print(f"Error detectado: {e}")
+        return jsonify({"error": "La web bloqueó el acceso. Intenta con otro link."}), 500
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 10000))
