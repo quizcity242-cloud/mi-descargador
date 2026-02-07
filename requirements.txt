@@ -1,6 +1,8 @@
 flask
 yt-dlp
+curl_cffi
 static-ffmpeg
+
 
 
 
