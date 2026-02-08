@@ -20,24 +20,34 @@ def download():
         return jsonify({"error": "No llegó el link"}), 400
     
     url = data['url']
-    cookie_file = os.path.join(os.getcwd(), 'cookies.txt')
+    # Ruta absoluta para evitar confusiones
+    cookie_path = os.path.join(os.getcwd(), 'cookies.txt')
 
-    # --- DIAGNÓSTICO DE COOKIES ---
-    if os.path.exists(cookie_file):
-        print(f"DEBUG: Archivo cookies.txt ENCONTRADO. Tamaño: {os.path.getsize(cookie_file)} bytes")
+    print("--- INICIO DE DIAGNÓSTICO ---")
+    if os.path.exists(cookie_path):
+        size = os.path.getsize(cookie_path)
+        print(f"DEBUG: Archivo cookies.txt encontrado. Tamaño: {size} bytes")
+        # Leemos la primera línea para verificar el formato
+        with open(cookie_path, 'r') as f:
+            first_line = f.readline().strip()
+            print(f"DEBUG: Primera línea de cookies: {first_line[:50]}...")
     else:
-        print("DEBUG: ¡ALERTA! archivo cookies.txt NO ENCONTRADO en la raíz.")
-    # ------------------------------
+        print("DEBUG: ¡ERROR! El archivo cookies.txt NO EXISTE en el servidor.")
+    print("----------------------------")
 
     ydl_opts = {
         'format': 'best',
         'outtmpl': f'{DOWNLOAD_FOLDER}/%(title)s.%(ext)s',
         'nocheckcertificate': True,
         'quiet': False,
-        'cookiefile': cookie_file if os.path.exists(cookie_file) else None,
-        'impersonate': 'firefox', 
-        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:123.0) Gecko/20100101 Firefox/123.0',
+        'cookiefile': cookie_path if os.path.exists(cookie_path) else None,
+        # Probamos sin impersonate primero para YouTube, es más estable con cookies
+        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
     }
+
+    # Si es Dailymotion, activamos el disfraz especial
+    if 'dailymotion' in url.lower():
+        ydl_opts['impersonate'] = 'firefox'
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -46,11 +56,16 @@ def download():
             return send_file(filename, as_attachment=True)
             
     except Exception as e:
-        full_error = str(e)
-        print(f"--- ERROR TÉCNICO COMPLETO ---\n{full_error}")
-        return jsonify({"error": f"Detalle: {full_error[:150]}"}), 500
+        error_msg = str(e)
+        print("--- ERROR TÉCNICO DETECTADO ---")
+        traceback.print_exc()
+        # Si el error contiene "confirm you're not a bot", es que las cookies fallaron
+        if "confirm you're not a bot" in error_msg.lower():
+            return jsonify({"error": "YouTube detectó un bot. Tus cookies podrían ser inválidas o viejas."}), 500
+        return jsonify({"error": f"Fallo: {error_msg[:100]}"}), 500
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 10000))
     app.run(host='0.0.0.0', port=port)
+
 
