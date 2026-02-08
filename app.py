@@ -20,16 +20,21 @@ def download():
         return jsonify({"error": "No llegó el link"}), 400
     
     url = data['url']
-    cookie_file = 'cookies.txt' # El archivo que subiste a GitHub
+    cookie_file = os.path.join(os.getcwd(), 'cookies.txt')
+
+    # --- DIAGNÓSTICO DE COOKIES ---
+    if os.path.exists(cookie_file):
+        print(f"DEBUG: Archivo cookies.txt ENCONTRADO. Tamaño: {os.path.getsize(cookie_file)} bytes")
+    else:
+        print("DEBUG: ¡ALERTA! archivo cookies.txt NO ENCONTRADO en la raíz.")
+    # ------------------------------
 
     ydl_opts = {
         'format': 'best',
         'outtmpl': f'{DOWNLOAD_FOLDER}/%(title)s.%(ext)s',
         'nocheckcertificate': True,
         'quiet': False,
-        # Si el archivo existe, lo usa para saltar el bloqueo de bot
         'cookiefile': cookie_file if os.path.exists(cookie_file) else None,
-        # Solución para Dailymotion (Disfraz de Firefox)
         'impersonate': 'firefox', 
         'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:123.0) Gecko/20100101 Firefox/123.0',
     }
@@ -41,9 +46,9 @@ def download():
             return send_file(filename, as_attachment=True)
             
     except Exception as e:
-        print("--- ERROR DETECTADO ---")
-        traceback.print_exc()
-        return jsonify({"error": f"Bloqueo detectado: {str(e)[:100]}"}), 500
+        full_error = str(e)
+        print(f"--- ERROR TÉCNICO COMPLETO ---\n{full_error}")
+        return jsonify({"error": f"Detalle: {full_error[:150]}"}), 500
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 10000))
