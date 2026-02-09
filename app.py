@@ -1,5 +1,6 @@
 import os
 import traceback
+import time
 from flask import Flask, render_template, request, jsonify, send_file
 import yt_dlp
 from static_ffmpeg import add_paths
@@ -20,36 +21,33 @@ def download():
         return jsonify({"error": "No llegó el link"}), 400
     
     url = data['url']
-    # Ruta absoluta para evitar confusiones
     cookie_path = os.path.join(os.getcwd(), 'cookies.txt')
 
-    print("--- INICIO DE DIAGNÓSTICO ---")
-    if os.path.exists(cookie_path):
-        size = os.path.getsize(cookie_path)
-        print(f"DEBUG: Archivo cookies.txt encontrado. Tamaño: {size} bytes")
-        # Leemos la primera línea para verificar el formato
-        with open(cookie_path, 'r') as f:
-            first_line = f.readline().strip()
-            print(f"DEBUG: Primera línea de cookies: {first_line[:50]}...")
-    else:
-        print("DEBUG: ¡ERROR! El archivo cookies.txt NO EXISTE en el servidor.")
-    print("----------------------------")
-
+    print(f"DEBUG: Intentando descargar: {url}")
+    
     ydl_opts = {
         'format': 'best',
         'outtmpl': f'{DOWNLOAD_FOLDER}/%(title)s.%(ext)s',
         'nocheckcertificate': True,
         'quiet': False,
+        'no_warnings': False,
+        # Forzamos el uso del archivo de cookies
         'cookiefile': cookie_path if os.path.exists(cookie_path) else None,
-        # Probamos sin impersonate primero para YouTube, es más estable con cookies
+        # Añadimos un pequeño retraso para no parecer un bot veloz
+        'sleep_interval': 1,
+        'max_sleep_interval': 3,
+        # User agent muy específico
         'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
     }
 
-    # Si es Dailymotion, activamos el disfraz especial
-    if 'dailymotion' in url.lower():
+    # Configuración especial si NO es YouTube (Dailymotion/MissAV)
+    if 'youtube' not in url.lower() and 'youtu.be' not in url.lower():
         ydl_opts['impersonate'] = 'firefox'
+        ydl_opts['extractor_args'] = {'dailymotion': {'impersonate': ['firefox']}}
 
     try:
+        # Esperamos un segundo antes de empezar
+        time.sleep(1)
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
             filename = ydl.prepare_filename(info)
@@ -57,15 +55,18 @@ def download():
             
     except Exception as e:
         error_msg = str(e)
-        print("--- ERROR TÉCNICO DETECTADO ---")
+        print("--- LOG DE ERROR ---")
         traceback.print_exc()
-        # Si el error contiene "confirm you're not a bot", es que las cookies fallaron
+        
+        # Sugerencia inteligente según el error
         if "confirm you're not a bot" in error_msg.lower():
-            return jsonify({"error": "YouTube detectó un bot. Tus cookies podrían ser inválidas o viejas."}), 500
-        return jsonify({"error": f"Fallo: {error_msg[:100]}"}), 500
+            return jsonify({"error": "YouTube bloqueó la IP del servidor. ¡Intenta con el link de MissAV o Dailymotion ahora, que esos sí deberían dejarte!"}), 500
+        
+        return jsonify({"error": f"Fallo técnico: {error_msg[:100]}"}), 500
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 10000))
     app.run(host='0.0.0.0', port=port)
+
 
 
